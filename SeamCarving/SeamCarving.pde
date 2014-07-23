@@ -9,10 +9,9 @@ int prevSize;
 int pos = 0;
 int sensitivity;
 int eSize;
-boolean[] usedHor;
-Integer[][] expHor;
-int horPos;
-boolean needResHor;
+Integer[][] expHor, expVer;
+int horPos, verPos;
+boolean needResHor, needResVer;
 
 void setup() {  
   
@@ -29,11 +28,12 @@ void setup() {
   prevSize = 0;
   sensitivity = 500;
   eSize = 20;
-  usedHor = new boolean[h];
   expHor = new Integer[h][h];
+  expVer = new Integer[l][l];
   needResHor = true;
+  needResVer = true;
   horPos = 2;
-  
+  verPos = 2;
 }
 
 void draw() {
@@ -95,13 +95,17 @@ void keyPressed() {
   }
   // right = 39
   if (keyCode == 39) {
-
-    //shiftRight();
+    if (l2 < img.width)
+      expVer();
+    else
+      needResVer = true;
   }
   // down = 40
   if (keyCode == 40) {
     if (h < img.height)
-    expHor();
+      expHor();
+    else
+      needResHor = true;
   }
   if (keyCode==32) {
     draw = !draw;
@@ -128,8 +132,130 @@ void mouseDragged() {
   careful.add( new Circle(mouseX, mouseY, eSize));
 }
 
+void expVer() {
+  int[][] temp = new int[h][l];
+  
+  //use all surrounding
+  for (int y = 1; y< (h-1); y++) {
+    for (int x = 2; x < (l2-1); x++) {
+      temp[y][x] = diffs[y][x];
+    }
+  }
+  
+  /*
+  //uses only pixels directly right
+  for (int x = 2; x < (l2-1); x++) {
+    for (int y = 1; y < (h-1); y++) {
+      int loc = y*l + x;
+      color c = pixels[loc];
+      color right = pixels[loc-1];
+      float rVal = sqrt( sq( red(c) - red(right)) );
+      float gVal = sqrt( sq( green(c) - green(right)) ) ;
+      float bVal = sqrt( sq( blue(c) - blue(right)) );
+      
+      int value = (int) ((rVal + gVal + bVal) / 3);
+      temp[y][x] = value;
+    }
+  }
+  */
+  for (Circle c: careful) {
+    int x = c.x;
+    int y = c.y;
+    int size = c.size;
+    
+    for (int i = y - size; i <= y + size; i++) {
+      for (int j = x - size; j <= x + size; j++) {
+        if ( i > 0 && i < h && j>0 && j < l2) {
+          if ( sq( j - x) + sq( i - y) <= sq(size) && temp[i][j] < sensitivity) {
+            temp[i][j] += sensitivity;
+          }
+        }
+      }
+    }
+  }
+  
+  int[][] temp2 = new int[h][l];
+  for (int i = 2; i < l2-1; i++) {
+    temp2[1][i] = temp[1][i];
+  }
+  
+  for (int j = 2; j < h-1; j++) {
+    for (int i = 2; i < (l2-1); i++) {
+      int cur = temp[j][i];
+      int a = temp2[j-1][i];
+      int b,c;
+      if (i-1 > 1)
+        b = temp2[j-1][i-1];
+      else
+        b = -1;
+      if (i+1< l2-1)
+        c = temp2[j-1][i+1];
+      else 
+        c = -1;
+      int min = getMin(a,b,c);
+      temp2[j][i] = min + cur;
+    }
+  }
+  if (needResVer) {
+    for (int i =2; i < l2-1; i++) {
+      expVer[i][0] = i;
+      expVer[i][1] = temp2[h-2][i];
+    }
+    
+    Arrays.sort( expVer, 2, l2-1, new Comparator<Integer[]>() {
+      public int compare(final Integer[] a, final Integer[] b) {
+        return a[1].compareTo( b[1] );
+      }
+    });
+    verPos = 2;
+    needResVer = false; 
+  }
+
+  int cur = expVer[verPos][0];
+  println("cur=" +cur + " val=" + expVer[verPos][1]);
+  
+  verPos++;
+  for (int i = verPos; i < l2-1-(verPos-3); i++) {
+    if (expVer[i][0] > cur) {
+      expVer[i][0]++;
+    }
+  }
+  
+  for (int i = h-2; i>0; i--) {
+    
+    int loc = i * l + cur;
+    
+    color c = pixels[loc];
+    color right = pixels[loc-1];
+    
+    float rVal = (red(c) + red(right)) /2 ;
+    float gVal = (green(c) + green(right)) /2 ;
+    float bVal = (blue(c) + blue(right)) /2;
+    
+    //move left
+    int max = l * (i+1) - 1;
+    for (int j = max; j > loc; j-= 1) {
+      pixels[j] = pixels[j-1];
+    }
+    pixels[loc] = color( rVal, gVal, bVal);
+    cur = getMinIndexRow2( cur, i-1, temp2);
+  }
+  l2++;
+  updatePixels();
+}
+
 void expHor() {
   int[][] temp = new int[h][l];
+  
+  // uses all surrounding pixels
+  for (int y = 2; y< (h-1); y++) {
+    for (int x =1; x < (l2-1); x++) {
+      temp[y][x] = diffs[y][x];
+    }
+  }
+  
+  //uses only pixels directly above
+  /*
   for (int y =2; y < (h-1); y++ ) {
     for (int x = 1; x < (l2-1); x++) {
         int loc = y*l + x;
@@ -146,7 +272,7 @@ void expHor() {
         //println(value);
     }
   }
-  
+  */
   //marksens
   for (Circle c: careful) {
     int x = c.x;
@@ -200,18 +326,26 @@ void expHor() {
         return a[1].compareTo( b[1] );
       }
     });
-    pos = 2;
+   horPos = 2;
    needResHor = false;
    
    for (int i=2; i < h-1; i++) {
-     println("{" + expHor[i][0] + ", " + expHor[i][1] + "}");
+     //println("{" + expHor[i][0] + ", " + expHor[i][1] + "}");
    }
   }
   
 
  int cur = expHor[horPos][0];
  println("cur=" +cur + " val=" + expHor[horPos][1]);
+ 
  horPos++;
+ println(horPos);
+ for (int i = horPos; i < h-1-(horPos-3); i++) {
+   if ( expHor[i][0] > cur) {
+     expHor[i][0]++;
+   }
+ }
+ 
   for (int i = l2-2; i > 0; i--) {
     
     int loc = cur * l + i;
@@ -451,6 +585,30 @@ int getMinIndexCol2( int a, int col, int[][] t) {
     return a+1;
 }
 
+int getMinIndexRow2( int a, int row, int[][] t) {
+
+  //println(a + ", " + row);
+  int mid = t[row][a];
+  int left, right;
+  if ((a-1) > 1) 
+    left = t[row][a-1];
+  else
+    left = -1;
+  if ((a+1) < l2-2)
+    right = t[row][a+1];
+  else
+    right = -1;
+  //println ( left + ", " + mid + ", " + right);
+  int min = getMin( left, mid, right);
+    //println(min);
+  if (min == mid)
+    return a;
+  if (min == left)
+    return a-1;
+  else
+    return a+1;
+  
+}
 
 int getMinIndexRow( int a, int row, int[][] t) {
 
