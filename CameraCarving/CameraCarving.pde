@@ -1,4 +1,12 @@
+import processing.video.*;
+import java.io.*;
 import java.util.*;
+Capture cam;
+import ddf.minim.*;
+
+Minim minim;
+AudioPlayer player;
+
 
 PImage img;
 int l, h, l2;
@@ -14,18 +22,41 @@ int horPos, verPos;
 boolean needResHor, needResVer;
 boolean removing;
 PFont mono;
+boolean editing;
+boolean first = true;
 
 void setup() {  
   
-  img = loadImage("beach.jpg");
-  
-  l = img.width;
+  l = 640;
+  h = 480;
   l2 = l;
-  h = img.height;
-  size(l, h);
+  
+  size(l,h);
+  String[] cameras = Capture.list();
+  
+  if (cameras == null) {
+    println("Failed to retrieve the list of available cameras, will try the default...");
+    cam = new Capture(this, 640, 480);
+  } if (cameras.length == 0) {
+    println("There are no cameras available for capture.");
+    exit();
+  } else {
+    println("Available cameras:");
+    for (int i = 0; i < cameras.length; i++) {
+      println(cameras[i]);
+    }
 
-  image(img, 0, 0);
-  loadPixels();
+    // The camera can be initialized directly using an element
+    // from the array returned by list():
+    cam = new Capture(this, cameras[0]);
+    // Or, the settings can be defined based on the text in the list
+    //cam = new Capture(this, 640, 480, "Built-in iSight", 30);
+    
+    // Start capturing the images from the camera
+    cam.start();
+  }
+  minim = new Minim(this);
+  
   careful = new ArrayList<Circle>();
   prevSize = 0;
   sensitivity = 500;
@@ -36,108 +67,127 @@ void setup() {
   needResVer = true;
   horPos = 2;
   verPos = 2;
-  mono = loadFont("AndaleMono-48.vlw");
 }
 
 void draw() {
 
-  //color[] temp = new color[ l * h ];
-  
-  diffs = new color[h][l];
-  
-  for (int y =1; y < (h-1); y++ ) {
-    for (int x = 1; x < (l-1); x++) {
-        int loc = y*l + x;
-        color c = pixels[loc];
-        color left = pixels[loc - 1];
-        color right = pixels[loc + 1];
-        color up = pixels[loc - l];
-        color down = pixels[loc + l];
-        
-        float rVal = sqrt( sq( red(left) - red(right)) + sq(red(up) - red(down)));
-        float gVal = sqrt( sq( green(left) - green(right)) + sq(green(up) - green(down)));
-        float bVal = sqrt( sq( blue(left) - blue(right)) + sq(blue(up) - blue(down)));
+  if (editing) {
+    if (first) {
+      img = loadImage("cur.jpg");
+      image(img,0,0);
+      loadPixels();
+      first = false;
+    }
+    diffs = new color[h][l];
     
-        int value = (int) ((rVal + gVal + bVal) / 3);
-        //temp[loc] = color(value);
-        diffs[y][x] = value;
-        //println(value);
+    for (int y =1; y < (h-1); y++ ) {
+      for (int x = 1; x < (l-1); x++) {
+          int loc = y*l + x;
+          color c = pixels[loc];
+          color left = pixels[loc - 1];
+          color right = pixels[loc + 1];
+          color up = pixels[loc - l];
+          color down = pixels[loc + l];
+          
+          float rVal = sqrt( sq( red(left) - red(right)) + sq(red(up) - red(down)));
+          float gVal = sqrt( sq( green(left) - green(right)) + sq(green(up) - green(down)));
+          float bVal = sqrt( sq( blue(left) - blue(right)) + sq(blue(up) - blue(down)));
+      
+          int value = (int) ((rVal + gVal + bVal) / 3);
+          //temp[loc] = color(value);
+          diffs[y][x] = value;
+          //println(value);
+      }
+    }
+    
+    for (int i = 0; i< l; i++) {
+      pixels[i] = color(0);
+    }
+    
+    for (int j = 0; j < h; j++) {
+      pixels[j*l] = color(0);
+    }
+    
+    updatePixels();
+      
+    if (draw) {
+      Circle cur = new Circle( mouseX,mouseY, eSize );
+      cur.display();
+  
+      for (Circle c: careful) {
+        c.display();
+      }
+    }
+    
+    if (removing) {
+      draw = false;
+      fill(255,0,0);
+      ellipse(mouseX,mouseY, eSize, eSize);
     }
   }
-  
-  for (int i = 0; i< l; i++) {
-    pixels[i] = color(0);
-  }
-  
-  for (int j = 0; j < h; j++) {
-    pixels[j*l] = color(0);
-  }
-  
-  updatePixels();
-    
-  if (draw) {
-    Circle cur = new Circle( mouseX,mouseY, eSize );
-    cur.display();
-
-    for (Circle c: careful) {
-      c.display();
+  else {
+    if (cam.available() == true) {
+    cam.read();
     }
+    image(cam, 0, 0);
   }
   
-  if (removing) {
-    draw = false;
-    fill(255,0,0);
-    ellipse(mouseX,mouseY, eSize, eSize);
-  }
 }
 
 void keyPressed() {
   // left = 37
-  if (keyCode == 37) {
-    removeVer();
-    shiftLeft();
+  if (editing) {
+    if (keyCode == 37) {
+      removeVer();
+      shiftLeft();
+    }
+    // top = 38
+    if (keyCode == 38) {
+      removeHor();
+      shiftUp();
+    }
+    // right = 39
+    if (keyCode == 39) {
+      if (l2 < img.width)
+        expVer();
+      else
+        needResVer = true;
+    }
+    // down = 40
+    if (keyCode == 40) {
+      if (h < img.height)
+        expHor();
+      else
+        needResHor = true;
+    }
+    if (keyCode==32) {
+      draw = !draw;
+      removing = false;
+    }
+    if (keyCode == 61) {
+      eSize += 4;
+    }
+    if (keyCode == 45) {
+      eSize -=4;
+    }
+    if (keyCode == 46) {
+      sensitivity += 20;
+      println(sensitivity);
+    }
+    if (keyCode ==44) {
+      sensitivity -= 20;
+      println(sensitivity);
+    }
+    if (keyCode ==82) {
+      removing = true;
+    }
   }
-  // top = 38
-  if (keyCode == 38) {
-    removeHor();
-    shiftUp();
+  else {
+    saveFrame("cur.jpg");
+    player = minim.loadFile("shutter.mp3");
+    player.play();
+    editing = true;
   }
-  // right = 39
-  if (keyCode == 39) {
-    if (l2 < img.width)
-      expVer();
-    else
-      needResVer = true;
-  }
-  // down = 40
-  if (keyCode == 40) {
-    if (h < img.height)
-      expHor();
-    else
-      needResHor = true;
-  }
-  if (keyCode==32) {
-    draw = !draw;
-    removing = false;
-  }
-  if (keyCode == 61) {
-    eSize += 4;
-  }
-  if (keyCode == 45) {
-    eSize -=4;
-  }
-  if (keyCode == 46) {
-    sensitivity += 20;
-    println(sensitivity);
-  }
-  if (keyCode ==44) {
-    sensitivity -= 20;
-    println(sensitivity);
-  }
-  if (keyCode ==82) {
-    removing = true;
-  }
-  println(keyCode);
   keyCode = 0;
   updatePixels();
   
@@ -158,6 +208,7 @@ void mouseDragged() {
     */
     loadPixels();
     updatePixels();
+    addBlack();
   }
 }
 
@@ -697,4 +748,22 @@ void markDel() {
     }
   }
 }
-      
+
+void addBlack() {
+  for ( int x = 0; x < l; x++) {
+    pixels[ x ] = color(0);
+  }
+  for ( int y = 0; y< img.height; y++) {
+    pixels[y*l] = color(0);
+  }
+  for ( int x = l2; x<l; x++) {
+    for (int y = 0; y < img.height; y++) {
+      pixels[y*l + x] = color(0);
+    }
+  }
+  for (int y = h; y < img.height; y++) {
+    for (int x = 0; x < l; x++) {
+      pixels[y*l + x] = color(0);
+    }
+  }
+}
