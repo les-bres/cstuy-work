@@ -12,7 +12,7 @@ int eSize;
 Integer[][] expHor, expVer;
 int horPos, verPos;
 boolean needResHor, needResVer;
-boolean removing;
+boolean removing, blurring;
 PFont mono;
 
 void setup() {  
@@ -85,8 +85,14 @@ void draw() {
   }
   
   if (removing) {
-    draw = false;
-    fill(255,0,0);
+    noTint();
+    fill(254,0,0);
+    ellipse(mouseX,mouseY, eSize, eSize);
+  }
+  
+  if (blurring) {
+    noTint();
+    fill(0,0,255);
     ellipse(mouseX,mouseY, eSize, eSize);
   }
 }
@@ -95,7 +101,7 @@ void keyPressed() {
   // left = 37
   if (keyCode == 37) {
     removeVer();
-    shiftLeft();
+    //shiftLeft();
   }
   // top = 38
   if (keyCode == 38) {
@@ -119,6 +125,7 @@ void keyPressed() {
   if (keyCode==32) {
     draw = !draw;
     removing = false;
+    blurring = false;
   }
   if (keyCode == 61) {
     eSize += 4;
@@ -135,9 +142,16 @@ void keyPressed() {
     println(sensitivity);
   }
   if (keyCode ==82) {
-    removing = true;
+    removing = !removing;
+    blurring = false;
+    draw = false;
   }
-  println(keyCode);
+  if (keyCode == 66) {
+    blurring = !blurring;
+    draw = false;
+    removing = false;
+  }
+  //println(keyCode);
   keyCode = 0;
   updatePixels();
   
@@ -147,20 +161,25 @@ void mouseDragged() {
   if (draw)
     careful.add( new Circle(mouseX, mouseY, eSize));
   if (removing) {
-    /*
-    for (int i = mouseX - 10; i < mouseX+10; i++) {
-      for (int j = mouseY - 10; j < mouseY + 10; j++) {
+    for (int i = mouseX - eSize; i < mouseX+eSize; i++) {
+      for (int j = mouseY - eSize; j < mouseY + eSize; j++) {
         if ( j > 0 && j < h-1 && i > 0 && i < l2-1) {
-          pixels[j*l + i] = color(255,0,0);
+          if (sq(j-mouseY) + sq(i-mouseX) < sq(eSize) * .3)
+            pixels[j*l + i] = color(254,0,0);
         }
       }
     }
-    */
-    loadPixels();
     updatePixels();
   }
+  if (blurring) {
+    blurArea(  mouseY,  mouseX, eSize);
+  } 
+    
 }
 
+void mousePressed() {
+  println( "r=" + red(pixels[mouseY * l + mouseX]) + "g=" + green(pixels[mouseY * l + mouseX]) + "b=" + blue(pixels[mouseY * l + mouseX]) );
+}
 void expVer() {
   int[][] temp = new int[h][l];
   
@@ -498,7 +517,11 @@ void removeVer() {
   
   int cur = shortestI;
   for (int i = h-2; i > 0; i--) {
-    pixels[ l * i + cur] = color(255,0,0);
+    //pixels[ l * i + cur] = color(255,0,0);
+    for (int j = cur; j < l2-1; j++) {
+      pixels[i*l + j] = pixels[i*l+j+1];
+    }
+    
     for (int j = 0; j < careful.size(); j++) {
       Circle c = careful.get(j);
       if (cur < c.x && c.needShift && c.y == i) {
@@ -511,9 +534,11 @@ void removeVer() {
         }
       }
     }
+    pixels[i*l + l2 -1] = color(0);
     cur = getMinIndexRow( cur, i-1, temp);
   }
-
+  l2--;
+  updatePixels();
 }
 
 void shiftUp() {
@@ -691,10 +716,42 @@ void markSens() {
 void markDel() {
   for (int y = 1; y < h-1; y++) {
     for (int x = 1; x < l2-1; x++) {
-      if (pixels[ y*l + x] == color(255,0,0)) {
+      if (pixels[ y*l + x] == color(254,0,0)) {
         diffs[y][x] -= 1000;
       }
     }
   }
+}
+      
+void blurArea( int y, int x, int size ) {      
+  int rSum = 0;
+  int bSum = 0;
+  int gSum = 0;
+  int totalNum = 0;
+  for (int i = x - eSize; i < x + size; i++) {
+    for (int j = y - eSize; j < y + size; j++) {
+      if ( j > 0 && j < h-1 && i > 0 && i < l2-1) {
+        if (sq(j-y) + sq(i-x) < sq(size) * .3) {
+          totalNum++;
+          rSum += red( pixels[j*l + i]);
+          bSum += blue( pixels[j*l+ i]);
+          gSum += green( pixels[j*l+i]);
+        }
+      }
+    }
+  }
+  rSum /= totalNum;
+  bSum /= totalNum;
+  gSum /= totalNum;
+  for (int i = x - size; i < x + size; i++) {
+    for (int j = y - size; j < y + size; j++) {
+      if ( j > 0 && j < h-1 && i > 0 && i < l2-1) {
+        if (sq(j-y) + sq(i-x) < sq(eSize) * .3) {
+          pixels[j*l + i] = color ( (red( pixels[j*l + i]) + rSum) / 2, (green( pixels[j*l + i]) + gSum) / 2, (blue( pixels[j*l + i]) + bSum) / 2);
+        }
+      }
+    }
+  }
+  updatePixels();
 }
       

@@ -11,8 +11,8 @@ class Circle {
   }
   
   void display() {
+    noTint();
     fill(0,255,0);
-    tint(255,10);
     noStroke();
     ellipse( x,y,size,size );
   }
