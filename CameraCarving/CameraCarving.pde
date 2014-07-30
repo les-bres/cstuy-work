@@ -11,7 +11,8 @@ AudioPlayer player;
 PImage img;
 int l, h, l2;
 int[][] diffs;
-ArrayList<Circle> careful;
+ArrayList<Circle> careful,delete,blur;
+int[][] carefulA, deleteA, blurA;
 boolean draw = true;
 int prevSize;
 int pos = 0;
@@ -20,9 +21,12 @@ int eSize;
 Integer[][] expHor, expVer;
 int horPos, verPos;
 boolean needResHor, needResVer;
-boolean removing;
+boolean removing, blurring;
+
+
 PFont mono;
 boolean editing;
+boolean saving;
 boolean first = true;
 
 void setup() {  
@@ -58,7 +62,11 @@ void setup() {
   minim = new Minim(this);
   
   careful = new ArrayList<Circle>();
-  prevSize = 0;
+  delete = new ArrayList<Circle>();
+  blur = new ArrayList<Circle>();
+  carefulA = new int[h][l];
+  deleteA = new int[h][l];
+  blurA = new int[h][l];
   sensitivity = 500;
   eSize = 20;
   expHor = new Integer[h][h];
@@ -78,7 +86,7 @@ void draw() {
       loadPixels();
       first = false;
     }
-    diffs = new color[h][l];
+     diffs = new color[h][l];
     
     for (int y =1; y < (h-1); y++ ) {
       for (int x = 1; x < (l-1); x++) {
@@ -108,43 +116,62 @@ void draw() {
       pixels[j*l] = color(0);
     }
     
+    for (int j = 0; j < h; j++) {
+      pixels[(j+1)*l -1 ] = color(0);
+    }
+    
+      
+    for (int i = 0; i< l; i++) {
+      pixels[l*(h-1)+i] = color(0);
+    }
+    
     updatePixels();
       
     if (draw) {
-      Circle cur = new Circle( mouseX,mouseY, eSize );
+      fill(0,255,0);
+      Circle cur = new Circle( mouseX,mouseY, eSize, 1 );
       cur.display();
-  
-      for (Circle c: careful) {
-        c.display();
-      }
+      displaySens();
     }
     
     if (removing) {
-      draw = false;
-      fill(255,0,0);
+      noTint();
+      fill(254,0,0);
       ellipse(mouseX,mouseY, eSize, eSize);
+      
+      displayDel();
+    }
+    
+    if (blurring) {
+      noTint();
+      fill(0,0,255);
+      ellipse(mouseX,mouseY, eSize, eSize);
+      displayBlur();
     }
   }
   else {
-    if (cam.available() == true) {
-    cam.read();
+    if (!saving) {
+      if (cam.available() == true) {
+      cam.read();
+      }
+      image(cam, 0, 0);
     }
-    image(cam, 0, 0);
   }
   
 }
 
 void keyPressed() {
-  // left = 37
-  if (editing) {
+    // left = 37
+    if (editing) {
+      // left = 37
     if (keyCode == 37) {
       removeVer();
-      shiftLeft();
+      //shiftLeft();
     }
     // top = 38
     if (keyCode == 38) {
       removeHor();
-      shiftUp();
+      //shiftUp();
     }
     // right = 39
     if (keyCode == 39) {
@@ -163,6 +190,7 @@ void keyPressed() {
     if (keyCode==32) {
       draw = !draw;
       removing = false;
+      blurring = false;
     }
     if (keyCode == 61) {
       eSize += 4;
@@ -179,7 +207,32 @@ void keyPressed() {
       println(sensitivity);
     }
     if (keyCode ==82) {
-      removing = true;
+      removing = !removing;
+      blurring = false;
+      draw = false;
+    }
+    if (keyCode == 66) {
+      blurring = !blurring;
+      draw = false;
+      removing = false;
+    }
+    if (keyCode == 10) {
+      if (blurring) {
+        blurArea();
+      }
+    }
+    if (keyCode == 83) {
+      saving = true;
+      editing = false;
+      saveFrame("edited.jpg");
+      
+      PImage i = loadImage("edited.jpg");
+      
+      size(l2, h);
+      image(i, 0,0);
+      saveFrame("edited.jpg");
+      
+      
     }
   }
   else {
@@ -195,25 +248,22 @@ void keyPressed() {
 
 void mouseDragged() {
   if (draw)
-    careful.add( new Circle(mouseX, mouseY, eSize));
+    careful.add( new Circle(mouseX, mouseY, eSize,1 ));
+    updateSens();
   if (removing) {
-    /*
-    for (int i = mouseX - 10; i < mouseX+10; i++) {
-      for (int j = mouseY - 10; j < mouseY + 10; j++) {
-        if ( j > 0 && j < h-1 && i > 0 && i < l2-1) {
-          pixels[j*l + i] = color(255,0,0);
-        }
-      }
-    }
-    */
-    loadPixels();
-    updatePixels();
-    addBlack();
+    delete.add( new Circle(mouseX, mouseY, eSize, 2));
+    updateDel();
   }
+  if (blurring) {
+    blur.add( new Circle(mouseX, mouseY, eSize, 3));
+    updateBlur();
+  } 
+  addBlack();
 }
 
 void expVer() {
   int[][] temp = new int[h][l];
+  markSens();
   
   //use all surrounding
   for (int y = 1; y< (h-1); y++) {
@@ -238,22 +288,7 @@ void expVer() {
     }
   }
   */
-  for (Circle c: careful) {
-    int x = c.x;
-    int y = c.y;
-    int size = c.size;
-    
-    for (int i = y - size; i <= y + size; i++) {
-      for (int j = x - size; j <= x + size; j++) {
-        if ( i > 0 && i < h && j>0 && j < l2) {
-          if ( sq( j - x) + sq( i - y) <= sq(size) && temp[i][j] < sensitivity) {
-            temp[i][j] += sensitivity;
-          }
-        }
-      }
-    }
-  }
-  
+
   int[][] temp2 = new int[h][l];
   for (int i = 2; i < l2-1; i++) {
     temp2[1][i] = temp[1][i];
@@ -312,19 +347,20 @@ void expVer() {
     float gVal = (green(c) + green(right)) /2 ;
     float bVal = (blue(c) + blue(right)) /2;
     
-    //move left
+    //move right
     int max = l * (i+1) - 1;
     for (int j = max; j > loc; j-= 1) {
       pixels[j] = pixels[j-1];
     }
     pixels[loc] = color( rVal, gVal, bVal);
-    cur = getMinIndexRow2( cur, i-1, temp2);
+    cur = getMinIndexRow( cur, i-1, temp2);
   }
   l2++;
   updatePixels();
 }
 
 void expHor() {
+  markSens();
   int[][] temp = new int[h][l];
   
   // uses all surrounding pixels
@@ -353,22 +389,6 @@ void expHor() {
     }
   }
   */
-  //marksens
-  for (Circle c: careful) {
-    int x = c.x;
-    int y = c.y;
-    int size = c.size;
-    
-    for (int i = y - size; i <= y + size; i++) {
-      for (int j = x - size; j <= x + size; j++) {
-        if ( i > 0 && i < h && j>0 && j < l2) {
-          if ( sq( j - x) + sq( i - y) <= sq(size) && temp[i][j] < sensitivity) {
-            temp[i][j] += sensitivity;
-          }
-        }
-      }
-    }
-  }
   
   int[][] temp2 = new int[h][l];
   for (int i = 2; i < h-1; i++) {
@@ -444,7 +464,7 @@ void expHor() {
     }
     pixels[loc] = color( rVal, gVal, bVal);
       
-    cur = getMinIndexCol2( cur, i-1, temp2);
+    cur = getMinIndexCol( cur, i-1, temp2);
   }
   h++;
   updatePixels();
@@ -485,29 +505,41 @@ void removeHor() {
     }
   }
   
+  int[][] coords = new int[l2-1][4];
+  for (int[] row: coords)
+    Arrays.fill(row, -1);
   
   int cur = shortestI;
   
   for (int i = l2-2; i > 0; i--) {
-    pixels[ cur * l + i] = color(255,0,0);
-    
-    for (int j =0; j < careful.size(); j++) {
-      Circle c = careful.get(j);
-        if ( cur < c.y && c.needShift && c.x == i) {
-          if (c.y > 0 ) {
-            c.y--;
-            c.needShift = false;
-           }
-           else {
-            careful.remove(j);
-           }
-       }
+    coords[i][0] = cur;
+    for (int j = cur; j < h-1; j++) {
+      pixels[l*j+i] = pixels[l*(j+1) + i];
+      deleteA[j][i] = deleteA[j+1][i];
+      carefulA[j][i] = carefulA[j+1][i];
     }
+    
     cur = getMinIndexCol( cur, i-1, temp);
   }
+  h--;
+  
+  for (int n = 0; n <2; n++) {
+    for (int i = 1; i < coords.length; i++) {
+      double[] colors = blurPixel( coords[i][0], i);
+      
+      coords[i][1] = (int) colors[0];
+      coords[i][2] = (int) colors[1];
+      coords[i][3] = (int) colors[2];
+    }
+    
+    for (int i = 1; i < coords.length; i++) {
+      if (coords[i][1] != -1) {
+        pixels[coords[i][0] * l + i] = color( coords[i][1], coords[i][2], coords[i][3] );
+      }
+    }
+    updatePixels();
+  }
 }
-
-
 void removeVer() {
   int[][] temp = new int[h][l2];
   
@@ -540,72 +572,47 @@ void removeVer() {
    
   int shortestI = 1;     
   for (int i = 2; i < (l2-1); i++)  {
-    //println( temp[h-2][i]);
     if (temp[h-2][i] < temp[h-2][shortestI]) {
       shortestI = i;
     }
   }
   
+  int[][] coords = new int[h-1][4];
+  for (int[] row: coords)
+    Arrays.fill(row, -1);
   
   int cur = shortestI;
   for (int i = h-2; i > 0; i--) {
-    pixels[ l * i + cur] = color(255,0,0);
-    for (int j = 0; j < careful.size(); j++) {
-      Circle c = careful.get(j);
-      if (cur < c.x && c.needShift && c.y == i) {
-        if (c.x > 0) {
-          c.x--;
-          c.needShift = false;
-        }
-        else { 
-        careful.remove(j);
-        }
-      }
+    coords[i][0] = cur;
+    for (int j = cur; j < l2-1; j++) {
+      pixels[i*l + j] = pixels[i*l+j+1];
+      deleteA[i][j] = deleteA[i][j+1];
+      carefulA[i][j] = carefulA[i][j+1];
     }
     cur = getMinIndexRow( cur, i-1, temp);
   }
-
-}
-
-void shiftUp() {
-  boolean shift = false;
-  for (int i = 1; i < l-1; i++) {
-    for (int j = 1; j < h-2; j++) {
-      if (!shift) {
-        if ( pixels[ l * j + i] == color(255,0,0)) {
-          shift = true;
-        }
-      }
-      if (shift) {
-        pixels[ l * j + i ] = pixels[l * (j+1) + i];
-      }
-    }
-    pixels[ l * (h-1) + i] = color(0);
-    shift = false;
-  }
-  h--;
-  updatePixels();
-}
-  
-void shiftLeft() {
-  boolean shift = false;
-  for (int y =0; y < h; y++) {
-    for (int x = 0; x < l-2; x++) {
-      if (!shift) {
-        if (pixels[l*y + x] == color(255,0,0)) {
-          shift = true;
-        }
-      }
-      if (shift) {
-        pixels[l*y + x] = pixels[l * y + x + 1];
-      }
-    }
-    pixels[l * y + l2 - 1] = color(0);
-    shift = false;
-  }
   l2--;
-  updatePixels();
+  
+  for (int n=0; n < 10; n++) {
+    for ( int i = 1; i < coords.length; i++) {
+      double[] colors = blurPixel(i, coords[i][0]);
+      
+      coords[i][1] = (int) colors[0];
+      coords[i][2] = (int) colors[1];
+      coords[i][3] = (int) colors[2];
+    }
+    
+    for ( int i = 1; i < coords.length; i++) {
+      if (coords[i][1] != -1) {
+        pixels[i*l + coords[i][0]] = color( coords[i][1], coords[i][2], coords[i][3] );
+      }
+    }
+    updatePixels();
+  }
 }
+
+
+
 int getMin( int a, int b, int c) {
   if ( a!= -1 && b != -1 && c!= -1 ) {
     return min(a,b,c);
@@ -624,29 +631,6 @@ int getMin( int a, int b, int c) {
 int getMinIndexCol( int a, int col, int[][] t) {
   int mid = t[a][col];
   int up,down;
-  if ((a-1) > 0) 
-    up = t[a-1][col];
-  else
-    up = -1;
-  if ((a+1) < (h-1)) {
-    down = t[a+1][col];
-  }
-  else
-    down = -1;
-    
-  int min = getMin( up, mid, down);
-
-  if (min == mid)
-    return a;
-  if (min == up)
-    return a-1;
-  else
-    return a+1;
-}
-
-int getMinIndexCol2( int a, int col, int[][] t) {
-  int mid = t[a][col];
-  int up,down;
   if ((a-1) > 1) 
     up = t[a-1][col];
   else
@@ -667,34 +651,9 @@ int getMinIndexCol2( int a, int col, int[][] t) {
     return a+1;
 }
 
-int getMinIndexRow2( int a, int row, int[][] t) {
-
-  //println(a + ", " + row);
-  int mid = t[row][a];
-  int left, right;
-  if ((a-1) > 1) 
-    left = t[row][a-1];
-  else
-    left = -1;
-  if ((a+1) < l2-2)
-    right = t[row][a+1];
-  else
-    right = -1;
-  //println ( left + ", " + mid + ", " + right);
-  int min = getMin( left, mid, right);
-    //println(min);
-  if (min == mid)
-    return a;
-  if (min == left)
-    return a-1;
-  else
-    return a+1;
-  
-}
 
 int getMinIndexRow( int a, int row, int[][] t) {
 
-  //println(a + ", " + row);
   int mid = t[row][a];
   int left, right;
   if ((a-1) > 1) 
@@ -705,9 +664,9 @@ int getMinIndexRow( int a, int row, int[][] t) {
     right = t[row][a+1];
   else
     right = -1;
-  //println ( left + ", " + mid + ", " + right);
+ 
   int min = getMin( left, mid, right);
-    //println(min);
+   
   if (min == mid)
     return a;
   if (min == left)
@@ -717,37 +676,164 @@ int getMinIndexRow( int a, int row, int[][] t) {
   
 }
 
-
-void markSens() {
-    for (Circle c: careful) {
-    c.needShift = true;
+void updateBlur() {
+  for (int n = 0; n < blur.size(); n++) {
+    Circle c = blur.get(n);
     int x = c.x;
     int y = c.y;
     int size = c.size;
-    
-    boolean[][] used = new boolean[h][l];
-    for (int i = y - size; i <= y + size; i++) {
-      for (int j = x - size; j <= x + size; j++) {
+    for (int i = y - size; i <= y+size; i++) {
+      for (int j = x - size; j <= x+size; j++) {
         if ( i > 0 && i < h && j>0 && j < l2) {
-          if ( sq( j - x) + sq( i - y) <= sq(size) && used[i][j] ==false) {
-            used[i][j] = true;
-            diffs[i][j] += sensitivity;
+          if ( sq( j - x) + sq( i - y) <= sq(size/2)) {
+            blurA[i][j] = 1;
           }
         }
       }
     }
+    blur.remove(n);
+  }
+}   
+
+void displayBlur() {
+  for (int y = 0; y < blurA.length; y++) {
+    for (int x = 0; x < blurA[0].length; x++) {
+      if (blurA[y][x] == 1) {
+        rect(x,y,1,1);
+      }
+    }
+  }
+}  
+
+void blurArea() {
+  
+  for (int y = 2; y < blurA.length; y++) {
+    for (int x = 2; x < blurA[0].length; x++) {
+      if (blurA[y][x] == 1) {
+        
+        double[] colors = blurPixel(y,x);
+        println( "origR=" + red(pixels[y*l+x]) + " origG=" + green(pixels[y*l+x]) + "origB=" + blue(pixels[y*l+x]));
+        println( "r=" + colors[0] + " g=" + colors[1] + " b=" + colors[2] );
+        pixels[y*l+x] = color( (int)colors[0], (int)colors[1], (int)colors[2]);
+      }
+    }
+  }
+  updatePixels();
+  for (int[] row: blurA) {
+    Arrays.fill(row, 0);
   }
 }
 
+void updateSens() {
+  for (int num = 0; num < careful.size(); num++) {
+    Circle c = careful.get(num);
+    int x = c.x;
+    int y = c.y;
+    int size = c.size;
+    for (int i = y - size; i <= y+size; i++) {
+      for (int j = x - size; j <= x+size; j++) {
+        if ( i > 0 && i < h && j>0 && j < l2) {
+          if ( sq( j - x) + sq( i - y) <= sq(size/2)) {
+            carefulA[i][j] = 1;
+          }
+        }
+      }
+    }
+    careful.remove(num);
+  }
+}
+
+void displaySens() {
+  for (int y = 0; y < carefulA.length; y++) {
+    for (int x = 0; x < carefulA[0].length; x++) {
+      if (carefulA[y][x] == 1) {
+        rect(x,y,1,1);
+      }
+    }
+  }
+}  
+
+void markSens() {
+  for (int y = 0; y < carefulA.length; y++) {
+    for (int x = 0; x < carefulA[0].length; x++) {
+      if (carefulA[y][x] == 1) {
+        diffs[y][x] += sensitivity;
+      }    
+    }
+  }
+}
+
+
 void markDel() {
-  for (int y = 1; y < h-1; y++) {
-    for (int x = 1; x < l2-1; x++) {
-      if (pixels[ y*l + x] == color(255,0,0)) {
-        diffs[y][x] -= 1000;
+  for (int y = 0; y < deleteA.length; y++) {
+    for (int x = 0; x < deleteA[0].length; x++) {
+      if (deleteA[y][x] == 1) {
+        diffs[y][x] -= 500;
+      }    
+    }
+  }
+}
+
+void updateDel() {
+  
+  for (int num = 0; num < delete.size(); num++) {
+    Circle c = delete.get(num);
+    int x = c.x;
+    int y = c.y;
+    int size = c.size;
+    for (int i = y - size; i <= y+size; i++) {
+      for (int j = x - size; j <= x+size; j++) {
+        if ( i > 0 && i < h && j>0 && j < l2) {
+          if ( sq( j - x) + sq( i - y) <= sq(size/2)) {
+            deleteA[i][j] = 1;
+          }
+        }
+      }
+    }
+    delete.remove(num);
+  }
+}
+
+void displayDel() {
+  for (int y = 0; y < deleteA.length; y++) {
+    for (int x = 0; x < deleteA[0].length; x++) {
+      if (deleteA[y][x] == 1) {
+        rect(x,y,1,1);
       }
     }
   }
 }
+       
+
+double[] blurPixel(int y, int x) {
+  
+  if (y<2 || y>(h-3) || x<2 || x > (l2-3)) {
+    double[] ret = new double[3];
+    ret[0] = red(pixels[l*y+x]);
+    ret[1] = green(pixels[l*y+x]);
+    ret[2] = blue(pixels[l*y+x]);
+    return ret;
+  }
+  
+  double red = 1.0/16 * red(pixels[(y-1)*l+x-1]) + 1.0/8 * red(pixels[(y-1)*l+x]) + 1.0/16 * red(pixels[(y-1)*l+x+1]);
+  red+= 1.0/8 * red(pixels[l*y+x-1]) + 1.0/4 * red(pixels[l*y+x]) +1.0/8 * red(pixels[l*y+x+1]);
+  red += 1.0/16 * red(pixels[(y+1)*l+x+1]) + 1.0/8 * red(pixels[(y+1)*l+x]) + 1.0/16 * red(pixels[(y+1)*l+x+1]);
+  double green = 1.0/16 * green(pixels[(y-1)*l+x-1]) + 1.0/8 * green(pixels[(y-1)*l+x]) + 1.0/16 * green(pixels[(y-1)*l+x+1]);
+  green+= 1.0/8 * green(pixels[l*y+x-1]) + 1.0/4 * green(pixels[l*y+x]) +1.0/8 * green(pixels[l*y+x+1]);
+  green += 1.0/16 * green(pixels[(y+1)*l+x+1]) + 1.0/8 * green(pixels[(y+1)*l+x]) + 1.0/16 * green(pixels[(y+1)*l+x+1]);
+  
+  double blue = 1.0/16 * blue(pixels[(y-1)*l+x-1]) + 1.0/8 * blue(pixels[(y-1)*l+x]) + 1.0/16 * blue(pixels[(y-1)*l+x+1]);
+  blue+= 1.0/8 * blue(pixels[l*y+x-1]) + 1.0/4 * blue(pixels[l*y+x]) +1.0/8 * blue(pixels[l*y+x+1]);
+  blue += 1.0/16 * blue(pixels[(y+1)*l+x+1]) + 1.0/8 * blue(pixels[(y+1)*l+x]) + 1.0/16 * blue(pixels[(y+1)*l+x+1]);
+  
+  double[] ret = new double[3];
+  ret[0] = red;
+  ret[1] = green;
+  ret[2] = blue;
+  return ret;
+}
+  
+      
 
 void addBlack() {
   for ( int x = 0; x < l; x++) {
