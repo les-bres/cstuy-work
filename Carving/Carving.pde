@@ -112,7 +112,9 @@ void setup() {
 
 void draw() {
   if (begin) {
+    tint(255,50);
     image(bkg, 0,0, bkg.width, bkg.height * 1.1);
+    noTint();
     textSize(32);
     textAlign(CENTER);
     fill(0);
@@ -146,7 +148,7 @@ void draw() {
     textSize(20);
     fill(0);
     rectMode(CENTER);
-    text("Drag your file to the this folder and type it's name exactly as it appears. Ex: Boat.jpg", width/2, 200,400,200);
+    text("Drag your file to the this folder and type it's name exactly as it appears. Ex: jump.jpg", width/2, 200,400,200);
     fill(255);
     rect( width/2, 300, 300, 50, 10);
     fill(0);
@@ -377,7 +379,7 @@ void keyPressed() {
   }
 
   keyCode = 0;
-  updatePixels();
+  //updatePixels();
   
 }
 
@@ -853,6 +855,8 @@ void updateBlur() {
 }   
 
 void displayBlur() {
+  fill(0,0,255);
+  noStroke();
   for (int y = 0; y < blurA.length; y++) {
     for (int x = 0; x < blurA[0].length; x++) {
       if (blurA[y][x] == 1) {
@@ -908,6 +912,8 @@ void updateSens() {
 }
 
 void displaySens() {
+  fill(0,255,0);
+  noStroke();
   for (int y = 0; y < carefulA.length; y++) {
     for (int x = 0; x < carefulA[0].length; x++) {
       if (carefulA[y][x] == 1) {
@@ -959,6 +965,8 @@ void updateDel() {
 }
 
 void displayDel() {
+  fill(255,0,0);
+  noStroke();
   for (int y = 0; y < deleteA.length; y++) {
     for (int x = 0; x < deleteA[0].length; x++) {
       if (deleteA[y][x] == 1) {
