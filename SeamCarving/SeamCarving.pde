@@ -65,7 +65,6 @@ void draw() {
           int value = (int) ((rVal + gVal + bVal) / 3);
           //temp[loc] = color(value);
           diffs[y][x] = value;
-          //println(value);
       }
     }
     
@@ -179,7 +178,7 @@ void keyPressed() {
     image(i, 0,0);
     saveFrame("edited.jpg");
   }
-  println(keyCode);
+  //println(keyCode);
   keyCode = 0;
   updatePixels();
   
@@ -352,9 +351,6 @@ void expHor() {
         c = -1;
       int min = getMin(a,b,c);
       temp2[j][i] = min + cur;
-      if (temp2[j][i] == 0) {
-        //println( "j=" + j + " i=" + i);
-      }
     }
   }
   if (needResHor) {
@@ -370,18 +366,13 @@ void expHor() {
     });
    horPos = 2;
    needResHor = false;
-   
-   for (int i=2; i < h-1; i++) {
-     //println("{" + expHor[i][0] + ", " + expHor[i][1] + "}");
-   }
   }
-  
 
  int cur = expHor[horPos][0];
- println("cur=" +cur + " val=" + expHor[horPos][1]);
+ //println("cur=" +cur + " val=" + expHor[horPos][1]);
  
  horPos++;
- println(horPos);
+ //println(horPos);
  for (int i = horPos; i < h-1-(horPos-3); i++) {
    if ( expHor[i][0] > cur) {
      expHor[i][0]++;
@@ -538,7 +529,7 @@ void removeVer() {
   }
   l2--;
   
-  for (int n=0; n < 10; n++) {
+  for (int n=0; n < 4; n++) {
     for ( int i = 1; i < coords.length; i++) {
       double[] colors = blurPixel(i, coords[i][0]);
       
@@ -652,21 +643,28 @@ void displayBlur() {
 
 void blurArea() {
   
+  color[] newPs = new color[pixels.length];
+  Arrays.fill(newPs, -1);
+  
   for (int y = 2; y < blurA.length; y++) {
     for (int x = 2; x < blurA[0].length; x++) {
       if (blurA[y][x] == 1) {
         
         double[] colors = blurPixel(y,x);
-        println( "origR=" + red(pixels[y*l+x]) + " origG=" + green(pixels[y*l+x]) + "origB=" + blue(pixels[y*l+x]));
-        println( "r=" + colors[0] + " g=" + colors[1] + " b=" + colors[2] );
-        pixels[y*l+x] = color( (int)colors[0], (int)colors[1], (int)colors[2]);
+        newPs[y*l+x] = color( (int)colors[0], (int)colors[1], (int)colors[2]);
       }
     }
   }
-  updatePixels();
+
   for (int[] row: blurA) {
     Arrays.fill(row, 0);
   }
+  for (int i = 0; i < newPs.length; i++) {
+    if (newPs[i] != -1) {
+      pixels[i] = newPs[i];
+    }
+  }
+  updatePixels();
 }
 
 void updateSens() {

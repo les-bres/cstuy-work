@@ -8,12 +8,12 @@ Minim minim;
 AudioPlayer player;
 
 
-PImage img;
+PImage img, bkg;
 int l, h, l2;
 int[][] diffs;
 ArrayList<Circle> careful,delete,blur;
 int[][] carefulA, deleteA, blurA;
-boolean draw = true;
+boolean draw;
 int prevSize;
 int pos = 0;
 int sensitivity;
@@ -22,21 +22,36 @@ Integer[][] expHor, expVer;
 int horPos, verPos;
 boolean needResHor, needResVer;
 boolean removing, blurring;
-
+int picNum = 1;
 
 PFont mono;
 boolean editing;
 boolean saving;
 boolean begin;
+boolean camera;
+boolean asking;
+boolean done;
+String typing = "";
+String saved = "";
 boolean first = true;
 
+int rect1X, rect1Y;
+int rect2X, rect2Y;
+int rectSize = 60;
+color rect1Color, rect2Color;
+color rect1Highlight, rect2Highlight;
+boolean rect1Over = false;
+boolean rect2Over = false;
+
+
 void setup() {  
-  
-  l = 640;
-  h = 480;
-  l2 = l;
-  
-  size(l,h);
+  frame.setResizable(true);
+  //l = 640;
+  //h = 480;
+  //l2 = l;
+  size(640,480);
+  frame.setSize(640,480);
+ 
   String[] cameras = Capture.list();
   
   if (cameras == null) {
@@ -58,107 +73,201 @@ void setup() {
     //cam = new Capture(this, 640, 480, "Built-in iSight", 30);
     
     // Start capturing the images from the camera
-    cam.start();
+    
   }
   minim = new Minim(this);
   
   careful = new ArrayList<Circle>();
   delete = new ArrayList<Circle>();
   blur = new ArrayList<Circle>();
+  /*
   carefulA = new int[h][l];
   deleteA = new int[h][l];
   blurA = new int[h][l];
+  */
   sensitivity = 500;
   eSize = 20;
+  /*
   expHor = new Integer[h][h];
   expVer = new Integer[l][l];
+  */
   needResHor = true;
   needResVer = true;
   horPos = 2;
   verPos = 2;
+  bkg = loadImage("background.jpg");
+  begin = true;
+  
+  rect1Color = color(48,100,48);
+  rect1Highlight = color(78,165,77);
+  rect2Color = color(50,75,113);
+  rect2Highlight = color(84,127,193);
+  rect1X = width/4 ;
+  rect1Y = 300;
+  rect2X = width/4 * 3 ;
+  rect2Y = 300;
+  ellipseMode(CENTER);
+  //rectMode(CENTER);
 }
 
 void draw() {
-
-  if (editing) {
+  if (begin) {
+    image(bkg, 0,0, bkg.width, bkg.height * 1.1);
+    textSize(32);
+    textAlign(CENTER);
+    fill(0);
+    text("Welcome to Seam Carving.", width/2, 100);
+    textSize(15);
+    text("Take a Photo to Edit", rect1X + 20, rect1Y - 10);
+    text("Upload Your own Photo", rect2X + 20, rect2Y - 10);
+    update(mouseX,mouseY);
+    if (rect1Over) {
+      fill(rect1Highlight);
+    }
+    else {
+      fill(rect1Color);
+    }
+    stroke(0);
+    rect(rect1X,rect1Y, rectSize, rectSize,11);
+    
+    if (rect2Over) {
+      fill(rect2Highlight);
+    }
+    else {
+      fill(rect2Color);
+    }
+    stroke(0);
+    rect(rect2X,rect2Y, rectSize, rectSize,11);
+    
+    
+  }
+  else if (asking) {
+    image(bkg, 0,0, bkg.width, bkg.height * 1.1);
+    textSize(20);
+    fill(0);
+    rectMode(CENTER);
+    text("Drag your file to the this folder and type it's name exactly as it appears. Ex: Boat.jpg", width/2, 200,400,200);
+    fill(255);
+    rect( width/2, 300, 300, 50, 10);
+    fill(0);
+    textSize(15);
+    text(typing,width/2, 300);
+    
+    
+  }
+  else if (editing) {
     if (first) {
+      if (camera) {
       img = loadImage("cur.jpg");
+      }
+      else {
+        img = loadImage(saved);
+      }
+      size(img.width,img.height);
+      frame.setSize(img.width, img.height);
+      l = img.width;
+      h = img.height;
+      l2 =l;
+      carefulA = new int[h][l];
+      deleteA = new int[h][l];
+      blurA = new int[h][l];
+      expHor = new Integer[h][h];
+      expVer = new Integer[l][l];
+      
       image(img,0,0);
       loadPixels();
       first = false;
+      addBlack();
+
     }
-     diffs = new color[h][l];
-    
-    for (int y =1; y < (h-1); y++ ) {
-      for (int x = 1; x < (l-1); x++) {
-          int loc = y*l + x;
-          color c = pixels[loc];
-          color left = pixels[loc - 1];
-          color right = pixels[loc + 1];
-          color up = pixels[loc - l];
-          color down = pixels[loc + l];
-          
-          float rVal = sqrt( sq( red(left) - red(right)) + sq(red(up) - red(down)));
-          float gVal = sqrt( sq( green(left) - green(right)) + sq(green(up) - green(down)));
-          float bVal = sqrt( sq( blue(left) - blue(right)) + sq(blue(up) - blue(down)));
+    else {
+      diffs = new color[h][l];
       
-          int value = (int) ((rVal + gVal + bVal) / 3);
-          //temp[loc] = color(value);
-          diffs[y][x] = value;
-          //println(value);
+      for (int y =1; y < (h-1); y++ ) {
+        for (int x = 1; x < (l-1); x++) {
+            int loc = y*l + x;
+            color c = pixels[loc];
+            color left = pixels[loc - 1];
+            color right = pixels[loc + 1];
+            color up = pixels[loc - l];
+            color down = pixels[loc + l];
+            
+            float rVal = sqrt( sq( red(left) - red(right)) + sq(red(up) - red(down)));
+            float gVal = sqrt( sq( green(left) - green(right)) + sq(green(up) - green(down)));
+            float bVal = sqrt( sq( blue(left) - blue(right)) + sq(blue(up) - blue(down)));
+        
+            int value = (int) ((rVal + gVal + bVal) / 3);
+            //temp[loc] = color(value);
+            diffs[y][x] = value;
+            //println(value);
+        }
+      }
+      
+      for (int i = 0; i< l; i++) {
+        pixels[i] = color(0);
+      }
+      
+      for (int j = 0; j < h; j++) {
+        pixels[j*l] = color(0);
+      }
+      
+      for (int j = 0; j < h; j++) {
+        pixels[(j+1)*l -1 ] = color(0);
+      }
+      
+        
+      for (int i = 0; i< l; i++) {
+        pixels[l*(h-1)+i] = color(0);
+      }
+      
+      updatePixels();
+        
+      if (draw) {
+        fill(0,255,0);
+        Circle cur = new Circle( mouseX,mouseY, eSize, 1 );
+        cur.display();
+        displaySens();
+      }
+      
+      if (removing) {
+        noTint();
+        fill(254,0,0);
+        ellipse(mouseX,mouseY, eSize, eSize);
+        
+        displayDel();
+      }
+      
+      if (blurring) {
+        noTint();
+        fill(0,0,255);
+        ellipse(mouseX,mouseY, eSize, eSize);
+        displayBlur();
       }
     }
-    
-    for (int i = 0; i< l; i++) {
-      pixels[i] = color(0);
-    }
-    
-    for (int j = 0; j < h; j++) {
-      pixels[j*l] = color(0);
-    }
-    
-    for (int j = 0; j < h; j++) {
-      pixels[(j+1)*l -1 ] = color(0);
-    }
-    
-      
-    for (int i = 0; i< l; i++) {
-      pixels[l*(h-1)+i] = color(0);
-    }
-    
-    updatePixels();
-      
-    if (draw) {
-      fill(0,255,0);
-      Circle cur = new Circle( mouseX,mouseY, eSize, 1 );
-      cur.display();
-      displaySens();
-    }
-    
-    if (removing) {
-      noTint();
-      fill(254,0,0);
-      ellipse(mouseX,mouseY, eSize, eSize);
-      
-      displayDel();
-    }
-    
-    if (blurring) {
-      noTint();
-      fill(0,0,255);
-      ellipse(mouseX,mouseY, eSize, eSize);
-      displayBlur();
-    }
   }
-  else {
-    if (!saving) {
-      if (cam.available() == true) {
-      cam.read();
+  else if (done) {
+    PImage i = loadImage("edited" + picNum + ".jpg");
+    image(i,0,0);
+    fill(0);
+    textSize(20);
+    textAlign(LEFT);
+    text("Your Saved Image",20,20);
+    fill(230,10,10);
+    rectMode(CORNER);
+    rect(40,30,100,30);
+    fill(0);
+    textSize(14);
+    text("Start Over", 50,50);
+  }
+    else {
+      if (!saving) {
+        cam.start();
+        if (cam.available() == true) {
+        cam.read();
+        }
+        image(cam, 0, 0);
       }
-      image(cam, 0, 0);
     }
-  }
-  
 }
 
 void keyPressed() {
@@ -224,43 +333,90 @@ void keyPressed() {
     }
     if (keyCode == 83) {
       saving = true;
+      removing = false;
+      blurring = false;
+      draw = false;
       editing = false;
-      saveFrame("edited.jpg");
       
-      PImage i = loadImage("edited.jpg");
+      saveFrame("edited" + picNum + ".jpg");
+      
+      PImage i = loadImage("edited" + picNum + ".jpg");
       
       size(l2, h);
+      frame.setSize(l2,h);
       image(i, 0,0);
-      saveFrame("edited.jpg");
-      
+      editing = false;
+      done = true;
+      saveFrame("edited" + picNum + ".jpg");
       
     }
   }
   else {
-    saveFrame("cur.jpg");
-    player = minim.loadFile("shutter.mp3");
-    player.play();
-    editing = true;
+    if (camera) {
+      saveFrame("cur.jpg");
+      player = minim.loadFile("shutter.mp3");
+      player.play();
+      editing = true;
+    }
+    if (asking) {
+      if (key == '\n' ) {
+        saved = typing;
+        typing = ""; 
+        asking = false;
+        editing = true;
+      } 
+      else if ( keyCode == 8) {
+        if (typing.length() > 0 ) 
+          typing = typing.substring(0, typing.length()-1);
+      }
+      else {
+        typing = typing + key; 
+      }
+      
+    }
   }
+
   keyCode = 0;
   updatePixels();
   
 }
 
 void mouseDragged() {
-  if (draw)
-    careful.add( new Circle(mouseX, mouseY, eSize,1 ));
-    updateSens();
-  if (removing) {
-    delete.add( new Circle(mouseX, mouseY, eSize, 2));
-    updateDel();
+  if (editing) {
+    if (draw)
+      careful.add( new Circle(mouseX, mouseY, eSize,1 ));
+      updateSens();
+    if (removing) {
+      delete.add( new Circle(mouseX, mouseY, eSize, 2));
+      updateDel();
+    }
+    if (blurring) {
+      blur.add( new Circle(mouseX, mouseY, eSize, 3));
+      updateBlur();
+    } 
+    addBlack();
   }
-  if (blurring) {
-    blur.add( new Circle(mouseX, mouseY, eSize, 3));
-    updateBlur();
-  } 
-  addBlack();
 }
+
+void mousePressed() {
+  if (begin) {
+    if (rect1Over) {
+      begin = false;
+      camera = true;
+    }
+    if (rect2Over) {
+      begin = false;
+      asking = true;
+    }
+  }
+  if (done) {
+    if (overRect(40,30,100,30)) {
+      reset();
+    }
+  }
+    
+}
+    
 
 void expVer() {
   int[][] temp = new int[h][l];
@@ -861,3 +1017,56 @@ void addBlack() {
     }
   }
 }
+
+void update(int x, int y) {
+  if ( overRect(rect1X, rect1Y, rectSize, rectSize) ) {
+    rect1Over = true;
+    rect2Over = false;
+  } else if ( overRect(rect2X, rect2Y, rectSize, rectSize) ) {
+    rect2Over = true;
+    rect1Over = false;
+  } else {
+    rect1Over = rect2Over = false;
+  }
+}
+
+boolean overRect(int x, int y, int width, int height)  {
+  if (mouseX >= x && mouseX <= x+width && 
+      mouseY >= y && mouseY <= y+height) {
+    return true;
+  } else {
+    return false;
+  }
+}
+
+void reset() {
+  l = 640;
+  h = 480;
+  l2 = l;
+  careful.clear();
+  delete.clear();
+  blur.clear();
+  carefulA = new int[h][l];
+  picNum++;
+  editing = false;
+  saving = false;
+  begin = true;
+  camera = false;
+  asking = false;
+  done = false;
+  typing = "";
+  saved = "";
+  first = true;
+  rect1Over = false;
+  rect2Over = false;
+  sensitivity = 500;
+  eSize = 20;
+  needResHor = true;
+  needResVer = true;
+  horPos = 2;
+  verPos=2;
+  size(640,480);
+  frame.setSize(640,480);
+  
+}
+  
